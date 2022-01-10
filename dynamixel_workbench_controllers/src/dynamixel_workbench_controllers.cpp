@@ -327,6 +327,7 @@ void DynamixelController::initSubscriber()
 {
   trajectory_sub_ = priv_node_handle_.subscribe("joint_trajectory", 100, &DynamixelController::trajectoryMsgCallback, this);
   if (is_cmd_vel_topic_) cmd_vel_sub_ = priv_node_handle_.subscribe("cmd_vel", 10, &DynamixelController::commandVelocityCallback, this);
+  joint_state_sub_ = node_handle_.subscribe("joint_state_cmd", 10, &DynamixelController::jointStateCallback, this);
 }
 
 void DynamixelController::initServer()
@@ -760,6 +761,62 @@ bool DynamixelController::dynamixelCommandMsgCallback(dynamixel_workbench_msgs::
   res.comm_result = result;
 
   return true;
+}
+
+void DynamixelController::jointStateCallback(const sensor_msgs::JointState& msg)
+{
+    ROS_INFO("Joint state command received.");
+    // TODO: Make max age a parameter.
+    auto age = (ros::Time::now() - msg.header.stamp).toSec();
+    if (age > 1.0)
+    {
+        ROS_WARN("Skipping joint state command %.1f s old.", age);
+        return;
+    }
+
+    if (!msg.position.empty())
+    {
+        ROS_WARN("Joint position command not supported.");
+        return;
+    }
+    if (!msg.effort.empty())
+    {
+        ROS_WARN("Joint effort command not supported.");
+        return;
+    }
+    if (msg.velocity.empty())
+    {
+        ROS_WARN("Skipping empty joint velocity command.");
+    }
+
+    bool result = false;
+    const char* log = nullptr;
+
+    std::vector<uint8_t> id;
+    std::vector<int32_t> vel;
+    for (size_t i = 0; i < msg.name.size() && i < msg.velocity.size(); ++i)
+    {
+        auto it = dynamixel_.find(msg.name[i]);
+        if (it == dynamixel_.end())
+        {
+            ROS_ERROR("Unknown joint name: %s.", msg.name[i].c_str());
+            continue;
+        }
+        id.push_back(it->second);
+        vel.push_back(dxl_wb_->convertVelocity2Value(it->second, msg.velocity[i]));
+        ROS_INFO("%s: id %i, velocity %.3f, value %i.",
+                 msg.name[i].c_str(), id.back(), msg.velocity[i], vel.back());
+    }
+
+    result = dxl_wb_->syncWrite(SYNC_WRITE_HANDLER_FOR_GOAL_VELOCITY, &id[0], id.size(), &vel[0], 1, &log);
+    if (!result)
+    {
+        ROS_ERROR("%s", log);
+    }
+    else
+    {
+        ROS_DEBUG("Sync write succeeded.");
+    }
 }
 
 int main(int argc, char **argv)
