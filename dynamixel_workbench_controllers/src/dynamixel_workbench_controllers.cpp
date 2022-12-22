@@ -765,7 +765,7 @@ bool DynamixelController::dynamixelCommandMsgCallback(dynamixel_workbench_msgs::
 
 void DynamixelController::jointStateCallback(const sensor_msgs::JointState& msg)
 {
-    ROS_INFO("Joint state command received.");
+    ROS_DEBUG("Joint state command received.");
     // TODO: Make max age a parameter.
     auto age = (ros::Time::now() - msg.header.stamp).toSec();
     if (age > 1.0)
