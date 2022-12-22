@@ -30,3 +30,7 @@
 
 # Users
 *.vscode
+
+# Idea project files and build outputs
+.idea
+cmake-build-*
